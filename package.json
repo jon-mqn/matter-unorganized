@@ -1,0 +1,31 @@
+{
+  "name": "offset-unruly",
+  "version": "1.0.0",
+  "description": "Generator, solver, and difficulty rater for Offset-Block Unruly (Frankengrid binary logic puzzle).",
+  "type": "module",
+  "bin": {
+    "unruly-gen": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "gen": "tsx src/cli.ts",
+    "dev": "vite --config web/vite.config.ts",
+    "build:web": "vite build --config web/vite.config.ts",
+    "preview": "vite preview --config web/vite.config.ts",
+    "check": "cd web && svelte-check --tsconfig ./tsconfig.json"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^4.0.4",
+    "@types/node": "^22.20.0",
+    "playwright": "^1.61.1",
+    "svelte": "^5.56.4",
+    "svelte-check": "^4.7.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.21",
+    "vitest": "^2.1.8"
+  }
+}
