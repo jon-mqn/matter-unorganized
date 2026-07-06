@@ -5,8 +5,10 @@
  * A cell's colour is 0 (white) or 1 (black). Board geometry is defined by a
  * union of rectangular blocks; lines are derived generically (§3.2).
  */
-/** A colour value in a completed cell. */
-export type Colour = 0 | 1;
+/** A colour value in a completed cell. 2 is the star of the star variant. */
+export type Colour = 0 | 1 | 2;
+/** The third cell state on star boards: exactly one per line. */
+export declare const SPECIAL = 2;
 /** A single grid cell, 1-indexed. */
 export interface Cell {
     r: number;
@@ -32,6 +34,11 @@ export interface Line {
     /** Cell order indices, in traversal order along the line. */
     cells: number[];
     length: number;
+    /**
+     * Required count per colour in the completed line (R2, generalised).
+     * Classic boards: [L/2, L/2]. Star boards: [(L-1)/2, (L-1)/2, 1].
+     */
+    targets: number[];
 }
 /**
  * Immutable board geometry and precomputed indices (§3.3). `order` and `cells`
@@ -49,6 +56,8 @@ export interface Board {
     linesOf: number[][];
     /** The source square blocks (1-indexed rects), for rendering block regions. */
     blocks: BlockDef[];
+    /** Number of cell states: 2 (classic) or 3 (star variant with specials). */
+    colours: number;
 }
 /**
  * A working assignment. Indexed by cell order index; values are 0, 1, or

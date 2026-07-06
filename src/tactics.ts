@@ -1,14 +1,24 @@
-import type { Board, Line, State } from "./types.js";
-import { EMPTY } from "./types.js";
+import type { Board, Colour, Line, State } from "./types.js";
+import { EMPTY, SPECIAL } from "./types.js";
 
 /**
- * Graded deduction tactics (§4.4). Each scans the current partial `state` and
- * returns the set of newly-forced moves (cell order index -> colour), plus a
- * contradiction flag when the forced deductions are mutually or structurally
- * inconsistent. None of them guess.
+ * Graded deduction tactics (§4.4), generalised to any number of cell states via
+ * candidate elimination. Each scans the current partial `state` and returns the
+ * set of newly-forced moves (cell order index -> colour), plus a contradiction
+ * flag when the forced deductions are mutually or structurally inconsistent.
+ * None of them guess.
+ *
+ * A cell's candidates are the colours not eliminated by:
+ *   (a) no-three windows — placing the colour would complete an equal triple;
+ *   (b) count caps — the colour already sits at its target on one of the
+ *       cell's lines.
+ * Tier 1 uses (a) only; tier 2 uses (a)+(b) plus the star hidden single. On
+ * classic 2-colour boards this reproduces the original tiers exactly: a window
+ * elimination leaves one candidate (the old [X,X,_] family), and a cap
+ * elimination leaves one candidate (the old balance fill).
  */
 export interface TacticResult {
-  moves: Map<number, 0 | 1>;
+  moves: Map<number, Colour>;
   contradiction: boolean;
 }
 
@@ -17,7 +27,7 @@ function addMove(
   res: TacticResult,
   state: State,
   idx: number,
-  val: 0 | 1,
+  val: Colour,
 ): void {
   const known = state[idx]!;
   if (known !== EMPTY) {
@@ -32,54 +42,113 @@ function addMove(
   res.moves.set(idx, val);
 }
 
-/** Tier 1 — local no-three forcing within each line's 3-windows. */
-export function tier1Moves(state: State, board: Board): TacticResult {
-  const res: TacticResult = { moves: new Map(), contradiction: false };
+/**
+ * Per-cell elimination bitmask from no-three windows: bit c is set when placing
+ * colour c at the cell would complete an equal triple (the window's other two
+ * cells are filled with c).
+ */
+function windowEliminations(state: State, board: Board): Uint8Array {
+  const elim = new Uint8Array(state.length);
   for (const line of board.lines) {
     const cells = line.cells;
     for (let i = 0; i + 2 < cells.length; i++) {
       const a = state[cells[i]!]!;
       const b = state[cells[i + 1]!]!;
       const c = state[cells[i + 2]!]!;
-      // [X, X, _] -> pos i+2 = ¬X
-      if (a !== EMPTY && a === b && c === EMPTY) {
-        addMove(res, state, cells[i + 2]!, (a ^ 1) as 0 | 1);
-      }
-      // [_, X, X] -> pos i = ¬X
-      if (b !== EMPTY && b === c && a === EMPTY) {
-        addMove(res, state, cells[i]!, (b ^ 1) as 0 | 1);
-      }
-      // [X, _, X] -> pos i+1 = ¬X
-      if (a !== EMPTY && a === c && b === EMPTY) {
-        addMove(res, state, cells[i + 1]!, (a ^ 1) as 0 | 1);
-      }
+      if (a !== EMPTY && a === b && c === EMPTY) elim[cells[i + 2]!]! |= 1 << a;
+      if (b !== EMPTY && b === c && a === EMPTY) elim[cells[i]!]! |= 1 << b;
+      if (a !== EMPTY && a === c && b === EMPTY) elim[cells[i + 1]!]! |= 1 << a;
+    }
+  }
+  return elim;
+}
+
+/**
+ * Add count-cap eliminations into `elim`: for each line and colour already at
+ * its target, eliminate that colour at the line's empty cells.
+ */
+function addCapEliminations(
+  state: State,
+  board: Board,
+  elim: Uint8Array,
+): void {
+  for (const line of board.lines) {
+    const counts = new Array<number>(board.colours).fill(0);
+    let empties = 0;
+    for (const ci of line.cells) {
+      const v = state[ci]!;
+      if (v === EMPTY) empties++;
+      else counts[v]!++;
+    }
+    if (empties === 0) continue;
+    let mask = 0;
+    for (let c = 0; c < line.targets.length; c++) {
+      if (counts[c]! >= line.targets[c]!) mask |= 1 << c;
+    }
+    if (mask === 0) continue;
+    for (const ci of line.cells) {
+      if (state[ci] === EMPTY) elim[ci]! |= mask;
+    }
+  }
+}
+
+/** Force every empty cell whose candidate set has exactly one colour left. */
+function nakedSingles(
+  state: State,
+  board: Board,
+  elim: Uint8Array,
+): TacticResult {
+  const res: TacticResult = { moves: new Map(), contradiction: false };
+  const full = (1 << board.colours) - 1;
+  for (let i = 0; i < state.length; i++) {
+    if (state[i] !== EMPTY) continue;
+    const allowed = full & ~elim[i]!;
+    if (allowed === 0) {
+      res.contradiction = true;
+      return res;
+    }
+    if ((allowed & (allowed - 1)) === 0) {
+      addMove(res, state, i, (31 - Math.clz32(allowed)) as Colour);
     }
   }
   return res;
 }
 
-/** Tier 2 — balance fill: a line at L/2 of one colour forces the rest. */
+/** Tier 1 — no-three forcing: window eliminations leaving a single candidate. */
+export function tier1Moves(state: State, board: Board): TacticResult {
+  return nakedSingles(state, board, windowEliminations(state, board));
+}
+
+/**
+ * Tier 2 — count forcing: window + cap eliminations leaving a single candidate
+ * (on classic boards exactly the old balance fill), plus, on star boards, the
+ * hidden single for the special: if only one cell of a line can still hold its
+ * special, force it there.
+ */
 export function tier2Moves(state: State, board: Board): TacticResult {
-  const res: TacticResult = { moves: new Map(), contradiction: false };
-  for (const line of board.lines) {
-    const cap = line.length / 2;
-    let ones = 0;
-    let zeros = 0;
-    let empties = 0;
-    for (const ci of line.cells) {
-      const v = state[ci]!;
-      if (v === 1) ones++;
-      else if (v === 0) zeros++;
-      else empties++;
-    }
-    if (empties === 0) continue;
-    if (ones === cap && zeros < cap) {
+  const elim = windowEliminations(state, board);
+  addCapEliminations(state, board, elim);
+  const res = nakedSingles(state, board, elim);
+  if (res.contradiction) return res;
+
+  if (board.colours > 2) {
+    const specialBit = 1 << SPECIAL;
+    for (const line of board.lines) {
+      let placed = 0;
+      const candidates: number[] = [];
       for (const ci of line.cells) {
-        if (state[ci] === EMPTY) addMove(res, state, ci, 0);
+        if (state[ci] === SPECIAL) placed++;
+        else if (state[ci] === EMPTY && (elim[ci]! & specialBit) === 0) {
+          candidates.push(ci);
+        }
       }
-    } else if (zeros === cap && ones < cap) {
-      for (const ci of line.cells) {
-        if (state[ci] === EMPTY) addMove(res, state, ci, 1);
+      if (placed >= line.targets[SPECIAL]!) continue;
+      if (candidates.length === 0) {
+        res.contradiction = true;
+        return res;
+      }
+      if (candidates.length === 1) {
+        addMove(res, state, candidates[0]!, SPECIAL);
       }
     }
   }
@@ -98,7 +167,7 @@ export function tier3Moves(state: State, board: Board): TacticResult {
     for (const ci of line.cells) if (state[ci] === EMPTY) empties.push(ci);
     if (empties.length === 0) continue;
 
-    const forced = lineForcedMoves(state, line);
+    const forced = lineForcedMoves(state, line, board.colours);
     if (forced === null) {
       res.contradiction = true;
       return res;
@@ -114,43 +183,53 @@ export function tier3Moves(state: State, board: Board): TacticResult {
  * completion (contradiction).
  *
  * Implemented as an O(L²) DP over line completions rather than enumerating all
- * 2^empties masks, so it stays fast on long spines (a stacked pair of size-14
- * blocks yields length-28 lines). State = (ones placed so far, last colour, run
- * length 1|2). Forward reachability F and backward completability G are combined
- * to find, per cell, which colours appear in some full valid completion; a cell
- * with exactly one possible colour is forced. This is the memoised line
- * enumeration anticipated by the spec (§10).
+ * colour^empties assignments, so it stays fast on long spines (a stacked pair
+ * of size-14 blocks yields length-28 lines). State = (count of colour 0, count
+ * of colour 1, last colour, run length); the count of the third colour is
+ * derived from the position. Forward reachability F and backward completability
+ * G are combined to find, per cell, which colours appear in some full valid
+ * completion; a cell with exactly one possible colour is forced. This is the
+ * memoised line enumeration anticipated by the spec (§10).
  */
-function lineForcedMoves(state: State, line: Line): Map<number, 0 | 1> | null {
+function lineForcedMoves(
+  state: State,
+  line: Line,
+  colours: number,
+): Map<number, Colour> | null {
   const cells = line.cells;
   const L = line.length;
-  const target = L / 2; // required count of each colour (R2)
+  const t0 = line.targets[0]!;
+  const t1 = line.targets[1]!;
+  const t2 = line.targets[2] ?? 0; // specials allowed (0 on classic boards)
   const fixed = cells.map((ci) => state[ci]!);
 
-  // State encoding: ones in [0,target], colour in {0,1,2=none}, run in {0,1,2}.
-  const size = (target + 1) * 9;
-  const enc = (ones: number, colour: number, run: number) =>
-    ones * 9 + colour * 3 + run;
-  const START = enc(0, 2, 0);
+  // State encoding: c0 in [0,t0], c1 in [0,t1], last colour in {0,1,2,3=none},
+  // run length in {0,1,2}. The third colour's count is i - c0 - c1.
+  const size = (t0 + 1) * (t1 + 1) * 4 * 3;
+  const enc = (c0: number, c1: number, last: number, run: number) =>
+    ((c0 * (t1 + 1) + c1) * 4 + last) * 3 + run;
+  const START = enc(0, 0, 3, 0);
 
   // Every valid transition from a state by placing colour `c` at position `i`.
   // Returns the successor state id, or -1 if the placement is illegal.
   const step = (id: number, c: number, i: number): number => {
     if (fixed[i] !== EMPTY && fixed[i] !== c) return -1;
-    const ones = Math.floor(id / 9);
-    const colour = Math.floor((id % 9) / 3);
     const run = id % 3;
+    const last = Math.floor(id / 3) % 4;
+    const c1 = Math.floor(id / 12) % (t1 + 1);
+    const c0 = Math.floor(id / (12 * (t1 + 1)));
     let nrun: number;
-    if (colour === c) {
+    if (last === c) {
       nrun = run + 1;
       if (nrun > 2) return -1; // R1: no three in a row
     } else {
       nrun = 1;
     }
-    const nones = ones + c; // c is 0 or 1
-    if (nones > target) return -1; // R2: too many of this colour
-    if (i + 1 - nones > target) return -1; // R2: too many of the other colour
-    return enc(nones, c, nrun);
+    const nc0 = c0 + (c === 0 ? 1 : 0);
+    const nc1 = c1 + (c === 1 ? 1 : 0);
+    if (nc0 > t0 || nc1 > t1) return -1; // R2: over a colour's target
+    if (i + 1 - nc0 - nc1 > t2) return -1; // R2: too many of the third colour
+    return enc(nc0, nc1, c, nrun);
   };
 
   // Forward: F[i] = states reachable after filling positions 0..i-1.
@@ -161,7 +240,7 @@ function lineForcedMoves(state: State, line: Line): Map<number, 0 | 1> | null {
     const Fn = F[i + 1]!;
     for (let id = 0; id < size; id++) {
       if (!Fi[id]) continue;
-      for (let c = 0; c < 2; c++) {
+      for (let c = 0; c < colours; c++) {
         const ns = step(id, c, i);
         if (ns >= 0) Fn[ns] = 1;
       }
@@ -171,13 +250,15 @@ function lineForcedMoves(state: State, line: Line): Map<number, 0 | 1> | null {
   // Backward: G[i] = states at boundary i that can complete to a valid line.
   const G: Uint8Array[] = Array.from({ length: L + 1 }, () => new Uint8Array(size));
   for (let id = 0; id < size; id++) {
-    if (Math.floor(id / 9) === target) G[L]![id] = 1; // accept: exactly target ones
+    const c1 = Math.floor(id / 12) % (t1 + 1);
+    const c0 = Math.floor(id / (12 * (t1 + 1)));
+    if (c0 === t0 && c1 === t1) G[L]![id] = 1; // accept: every target hit
   }
   for (let i = L - 1; i >= 0; i--) {
     const Gi = G[i]!;
     const Gn = G[i + 1]!;
     for (let id = 0; id < size; id++) {
-      for (let c = 0; c < 2; c++) {
+      for (let c = 0; c < colours; c++) {
         const ns = step(id, c, i);
         if (ns >= 0 && Gn[ns]) {
           Gi[id] = 1;
@@ -189,24 +270,24 @@ function lineForcedMoves(state: State, line: Line): Map<number, 0 | 1> | null {
 
   if (!G[0]![START]) return null; // no valid completion at all
 
-  const forced = new Map<number, 0 | 1>();
+  const forced = new Map<number, Colour>();
   for (let i = 0; i < L; i++) {
     if (fixed[i] !== EMPTY) continue;
     const Fi = F[i]!;
     const Gn = G[i + 1]!;
-    let allow0 = false;
-    let allow1 = false;
-    for (let id = 0; id < size && !(allow0 && allow1); id++) {
+    let allowedMask = 0;
+    for (let id = 0; id < size; id++) {
       if (!Fi[id]) continue;
-      for (let c = 0; c < 2; c++) {
+      for (let c = 0; c < colours; c++) {
+        if (allowedMask & (1 << c)) continue;
         const ns = step(id, c, i);
-        if (ns >= 0 && Gn[ns]) {
-          if (c === 0) allow0 = true;
-          else allow1 = true;
-        }
+        if (ns >= 0 && Gn[ns]) allowedMask |= 1 << c;
       }
+      if (allowedMask === (1 << colours) - 1) break;
     }
-    if (allow0 !== allow1) forced.set(cells[i]!, allow1 ? 1 : 0);
+    if (allowedMask !== 0 && (allowedMask & (allowedMask - 1)) === 0) {
+      forced.set(cells[i]!, (31 - Math.clz32(allowedMask)) as Colour);
+    }
   }
   return forced;
 }

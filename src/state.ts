@@ -1,4 +1,4 @@
-import type { Assignment, Board, State } from "./types.js";
+import type { Assignment, Board, Colour, State } from "./types.js";
 import { EMPTY, cellId } from "./types.js";
 
 /** A fresh all-empty state for a board. */
@@ -26,7 +26,7 @@ export function stateToAssignment(board: Board, state: State): Assignment {
   const out: Assignment = new Map();
   board.order.forEach((cell, idx) => {
     const v = state[idx]!;
-    if (v !== EMPTY) out.set(cellId(cell.r, cell.c), v as 0 | 1);
+    if (v !== EMPTY) out.set(cellId(cell.r, cell.c), v as Colour);
   });
   return out;
 }

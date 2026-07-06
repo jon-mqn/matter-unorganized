@@ -1,6 +1,19 @@
 import { EMPTY } from "./types.js";
 import { legal } from "./rules.js";
+import { shuffle } from "./rng.js";
 import { assignmentToState, cloneState, emptyState } from "./state.js";
+/**
+ * Colour try-order for one cell of the random fill. The 2-colour path consumes
+ * exactly one rng() call (a coin flip), byte-identical to the original binary
+ * implementation, so classic seeds keep producing the same puzzles.
+ */
+function randomColourOrder(colours, rng) {
+    if (colours === 2) {
+        const first = rng() < 0.5 ? 0 : 1;
+        return [first, (first ^ 1)];
+    }
+    return shuffle(Array.from({ length: colours }, (_, c) => c), rng);
+}
 /**
  * Count solutions consistent with `clues`, stopping early once `cap` are found
  * (§4.2). Use cap = 2 for uniqueness testing — we only need "exactly 1" vs "≥ 2".
@@ -20,7 +33,8 @@ export function countSolutions(clues, board, cap = 2) {
             recurse(i + 1);
             return;
         }
-        for (const val of [0, 1]) {
+        for (let v = 0; v < board.colours; v++) {
+            const val = v;
             if (legal(state, i, val, board)) {
                 state[i] = val;
                 recurse(i + 1);
@@ -60,8 +74,7 @@ export function randomSolution(board, rng) {
                 aborted = true;
                 return false;
             }
-            const first = rng() < 0.5 ? 0 : 1;
-            for (const val of [first, (first ^ 1)]) {
+            for (const val of randomColourOrder(board.colours, rng)) {
                 if (legal(state, i, val, board)) {
                     state[i] = val;
                     if (recurse(i + 1))

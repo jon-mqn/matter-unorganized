@@ -3,9 +3,9 @@
 // travel as plain entry arrays.
 export * from "@engine/index.js";
 
-import type { Assignment, Difficulty, Rating, TierCounts } from "@engine/index.js";
+import type { Assignment, Colour, Difficulty, Rating, TierCounts } from "@engine/index.js";
 
-export type AssignmentEntries = [string, 0 | 1][];
+export type AssignmentEntries = [string, Colour][];
 
 export function assignmentToEntries(a: Assignment): AssignmentEntries {
   return [...a.entries()];

@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "gen": "tsx src/cli.ts",
+    "eval": "tsx src/eval.ts",
     "dev": "vite --config web/vite.config.ts",
     "build:web": "vite build --config web/vite.config.ts",
     "preview": "vite preview --config web/vite.config.ts",

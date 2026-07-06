@@ -13,6 +13,19 @@ maximal contiguous run of cells along a row or column) satisfies:
 - **R1 — No-three:** no three consecutive cells in a line share a colour.
 - **R2 — Balance:** each line has an equal count of both colours.
 
+### Star variant
+
+Odd single squares (7, 9, 11 or 15) where each cell is white, black, or a
+**star** (`2`), and every line holds (n−1)/2 of each colour plus **exactly one
+star** — so the stars form a permutation matrix (1-star Star Battle layered
+under Unruly). R1 applies to colour runs; a star interrupts a run. Internally
+R2 is generalised to a per-line target count per colour (`line.targets`), and
+the solver tiers become candidate-elimination (a `[X,X,_]` window only
+*eliminates* X now), plus a hidden single for the star ("only one cell in this
+line can still hold it"). Board tokens: `s7 | s9 | s11 | s15`. See
+[`star-eval.md`](./star-eval.md) for the difficulty study vs classic
+(`npm run eval` regenerates it).
+
 ## Setup
 
 Requires Node 20+. This machine has no system Node; a portable build lives at
@@ -39,8 +52,10 @@ npm run check      # svelte-check the web app
 CLI flags: `--board <token>` (default `reference`), `--difficulty easy|medium|hard`,
 `--seed <int>`, `--passes <int>`. Output is deterministic for a given seed.
 
-`--board` is either `reference` or a `-`-joined list of even square sizes, e.g.
-`6-6`, `6-6-8`, `8-8`, `14-14` (see Boards below).
+`--board` is `reference`, a `-`-joined list of even square sizes (e.g.
+`6-6`, `6-6-8`, `8-8`, `14-14`; see Boards below), or a star-variant token
+(`s7`, `s9`, `s11`, `s15`). `npm run eval` runs the star-vs-classic difficulty
+study and writes `star-eval.md`.
 
 ## Boards
 
@@ -75,7 +90,8 @@ red, remembered across sessions), **frankensquare regions** (each source block
 is outlined behind the grid and shaded green once all its cells match the
 solution), and shareable seed URLs
 (`#<sizes>/<difficulty>/<seed>`, e.g. `#6-6-8/hard/12345`, regenerates the exact
-puzzle).
+puzzle). The board dialog's **Star** variant switches to the odd-square star
+boards (`#s7/...` URLs); cells then cycle empty → pencil → pencil → ✶ → empty.
 
 The app imports the engine via the `@engine` Vite alias (repo-root `src/`); no
 engine code is duplicated. Board rendering uses CSS Grid, placing each cell at

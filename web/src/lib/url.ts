@@ -1,7 +1,10 @@
-import { parseBoardToken, type Difficulty } from "./engine.js";
+import { parseBoardToken, parseStarSize, type Difficulty } from "./engine.js";
 
 export interface PuzzleParams {
-  /** Board token: "-"-joined even sizes, e.g. "6-6-8" (also accepts "reference"). */
+  /**
+   * Board token: "-"-joined even sizes, e.g. "6-6-8" (also accepts
+   * "reference"), or a star-variant token like "s7".
+   */
   board: string;
   difficulty: Difficulty;
   seed: number;
@@ -19,7 +22,7 @@ export function decodeHash(hash: string): PuzzleParams | null {
   const parts = hash.replace(/^#/, "").split("/");
   if (parts.length !== 3) return null;
   const [board, difficulty, seedStr] = parts as [string, string, string];
-  if (!parseBoardToken(board)) return null;
+  if (!parseBoardToken(board) && parseStarSize(board) === null) return null;
   if (!DIFFICULTIES.includes(difficulty as Difficulty)) return null;
   const seed = Number(seedStr);
   if (!Number.isInteger(seed) || seed < 0) return null;

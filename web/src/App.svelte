@@ -21,7 +21,13 @@
 <main>
   <header>
     <h1>Matter unorganized</h1>
-    <p class="rules">No three in a row · each line half graphite, half red</p>
+    <p class="rules">
+      {#if game.isStar}
+        No three in a row · equal pencils per line · one ✶ in every row &amp; column
+      {:else}
+        No three in a row · each line half graphite, half red
+      {/if}
+    </p>
   </header>
 
   <Controls {game} />

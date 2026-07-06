@@ -1,4 +1,4 @@
-import type { Assignment, Board, LogicResult, RateResult, State } from "./types.js";
+import type { Assignment, Board, Colour, LogicResult, RateResult, State } from "./types.js";
 /**
  * No-guessing logic solver (§4.4). Repeatedly applies the *lowest* tier (up to
  * `maxTier`) that yields at least one new move, to fixpoint. Records per-tier
@@ -11,7 +11,7 @@ export declare function rate(clues: Assignment, board: Board): RateResult;
 export declare function isFullySolved(clues: Assignment, board: Board, maxTier?: number): boolean;
 export interface ForcedMove {
     cellIdx: number;
-    val: 0 | 1;
+    val: Colour;
     /** The lowest tier (1-3) that forces this move — used to explain the hint. */
     tier: number;
 }

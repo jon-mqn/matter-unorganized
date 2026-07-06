@@ -1,7 +1,11 @@
 export * from "./types.js";
-export { buildBoard } from "./board.js";
+export { buildBoard, type Variant } from "./board.js";
 export {
   REFERENCE_BLOCKS,
+  STAR_SIZES,
+  starBoardToken,
+  parseStarSize,
+  buildStarBoard,
   referenceBoardBuild,
   BOARD_REGISTRY,
   MIN_SIZE,

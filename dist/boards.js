@@ -5,6 +5,12 @@ export const MIN_SIZE = 6;
 export const MAX_SIZE = 14;
 export const MAX_BLOCKS = 5;
 /**
+ * Allowed sizes for the star variant: odd squares where every row/column holds
+ * (n-1)/2 of each colour plus exactly one special. Single square only (no
+ * frankengrids) for v1.
+ */
+export const STAR_SIZES = [7, 9, 11, 15];
+/**
  * Cap on total cells (sum of size²). Generation cost grows ~quadratically with
  * cell count (the logic-aware reducer re-solves the board per candidate clue),
  * so this keeps the largest allowed board generating in a few seconds. Permits
@@ -217,6 +223,31 @@ export function arrangeBlocks(sizes, arrSeed) {
         return elo + 2 * Math.floor(r() * ((ehi - elo) / 2 + 1));
     }
 }
+/** Star-board token for a size, e.g. 7 -> "s7". */
+export function starBoardToken(size) {
+    return `s${size}`;
+}
+/** Parse a star token ("s7") to its size, or null if not a valid star token. */
+export function parseStarSize(token) {
+    const m = /^s(\d+)$/.exec(token);
+    if (!m)
+        return null;
+    const size = Number(m[1]);
+    return STAR_SIZES.includes(size) ? size : null;
+}
+/** Build (and cache) a single-square star board of the given size. */
+export function buildStarBoard(size) {
+    if (!STAR_SIZES.includes(size)) {
+        throw new Error(`Star board size ${size} must be one of ${STAR_SIZES.join(", ")}.`);
+    }
+    const token = starBoardToken(size);
+    let board = stackedCache.get(token);
+    if (!board) {
+        board = buildBoard(token, [{ rowStart: 1, rowEnd: size, colStart: 1, colEnd: size }], "star");
+        stackedCache.set(token, board);
+    }
+    return board;
+}
 /** Board token: sizes, optionally with an arrangement seed ("6-6-8~42"). */
 export function boardToken(sizes, arrSeed) {
     const base = sizes.join("-");
@@ -251,6 +282,9 @@ export function parseBoardToken(token) {
 }
 /** Resolve a board token to a Board (used by the CLI and web UI). */
 export function resolveBoard(token) {
+    const starSize = parseStarSize(token);
+    if (starSize !== null)
+        return buildStarBoard(starSize);
     const sizes = parseBoardToken(token);
     if (!sizes)
         throw new Error(`Invalid board "${token}".`);

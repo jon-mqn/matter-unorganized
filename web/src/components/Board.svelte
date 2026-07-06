@@ -11,7 +11,7 @@
   const BLOCK_COLORS = ["#3f6fa3", "#4f9a5c", "#cf8a2e", "#8a5aa8", "#3a9a95"];
 
   function label(v: number): string {
-    return v === 1 ? "graphite" : v === 0 ? "red" : "empty";
+    return v === 1 ? "graphite" : v === 0 ? "red" : v === 2 ? "star" : "empty";
   }
 </script>
 
@@ -137,6 +137,28 @@
   }
   .cell:nth-child(5n)::before {
     transform: rotate(0.5deg);
+  }
+
+  /* The star variant's third state: a blue-pencil star sketched in the box. */
+  .cell.star::after {
+    content: "✶";
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-family: var(--font-hand);
+    font-size: calc(var(--cell) * 0.68);
+    line-height: 1;
+    color: #3f6fa3;
+    text-shadow: 0.5px 0.5px 0 rgba(63, 111, 163, 0.45);
+    transform: rotate(-6deg);
+    pointer-events: none;
+  }
+  .cell:nth-child(2n).star::after {
+    transform: rotate(5deg);
+  }
+  .cell:nth-child(3n).star::after {
+    transform: rotate(-3deg);
   }
 
   /* Given clues are "printed" — a heavier ink box. */

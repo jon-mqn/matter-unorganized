@@ -4,6 +4,12 @@ export declare const MIN_SIZE = 6;
 export declare const MAX_SIZE = 14;
 export declare const MAX_BLOCKS = 5;
 /**
+ * Allowed sizes for the star variant: odd squares where every row/column holds
+ * (n-1)/2 of each colour plus exactly one special. Single square only (no
+ * frankengrids) for v1.
+ */
+export declare const STAR_SIZES: readonly [7, 9, 11, 15];
+/**
  * Cap on total cells (sum of size²). Generation cost grows ~quadratically with
  * cell count (the logic-aware reducer re-solves the board per candidate clue),
  * so this keeps the largest allowed board generating in a few seconds. Permits
@@ -60,6 +66,12 @@ export declare function buildStackedBoard(sizes: number[]): Board;
  * cell), so any mix of stacking, side-by-side and overlap stays R2-legal.
  */
 export declare function arrangeBlocks(sizes: number[], arrSeed: number): BlockDef[];
+/** Star-board token for a size, e.g. 7 -> "s7". */
+export declare function starBoardToken(size: number): string;
+/** Parse a star token ("s7") to its size, or null if not a valid star token. */
+export declare function parseStarSize(token: string): number | null;
+/** Build (and cache) a single-square star board of the given size. */
+export declare function buildStarBoard(size: number): Board;
 /** Board token: sizes, optionally with an arrangement seed ("6-6-8~42"). */
 export declare function boardToken(sizes: number[], arrSeed?: number): string;
 /** Extract the arrangement seed from a token, or undefined for a canonical stack. */

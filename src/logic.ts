@@ -1,6 +1,7 @@
 import type {
   Assignment,
   Board,
+  Colour,
   LogicResult,
   RateResult,
   Rating,
@@ -80,7 +81,7 @@ export function isFullySolved(
 
 export interface ForcedMove {
   cellIdx: number;
-  val: 0 | 1;
+  val: Colour;
   /** The lowest tier (1-3) that forces this move — used to explain the hint. */
   tier: number;
 }

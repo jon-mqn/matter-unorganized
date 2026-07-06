@@ -1,13 +1,21 @@
 import type { Board, BlockDef, Cell, Line } from "./types.js";
 import { cellId } from "./types.js";
 
+/** Board variant: classic two-colour, or star (white/black + one special). */
+export type Variant = "classic" | "star";
+
 /**
  * Build a board from a union of rectangular blocks (§3.2). Line construction is
  * fully generic — it works for any union of blocks (stacked, offset, pinwheel,
- * with or without true overlap) with no special-casing. Throws if any resulting
- * line has odd length (§2.1: R2 would be unsatisfiable).
+ * with or without true overlap) with no special-casing. Classic boards require
+ * every line length to be even (§2.1: R2 would be unsatisfiable otherwise);
+ * star boards require every line length to be odd (2h + 1 special).
  */
-export function buildBoard(id: string, blockDefs: BlockDef[]): Board {
+export function buildBoard(
+  id: string,
+  blockDefs: BlockDef[],
+  variant: Variant = "classic",
+): Board {
   // 1. Union all block cells into a de-duplicated set.
   const cellSet = new Map<string, Cell>();
   for (const b of blockDefs) {
@@ -55,13 +63,25 @@ export function buildBoard(id: string, blockDefs: BlockDef[]): Board {
     }
   }
 
-  // 4. Validate: every line length must be even (§2.1).
+  // 4. Validate line-length parity and derive per-colour targets (R2).
   for (const line of lines) {
-    if (line.length % 2 !== 0) {
-      throw new Error(
-        `Illegal board "${id}": ${line.axis}-line at index ${line.index} has ` +
-          `odd length ${line.length}; every line length must be even (R2).`,
-      );
+    if (variant === "classic") {
+      if (line.length % 2 !== 0) {
+        throw new Error(
+          `Illegal board "${id}": ${line.axis}-line at index ${line.index} has ` +
+            `odd length ${line.length}; every line length must be even (R2).`,
+        );
+      }
+      line.targets = [line.length / 2, line.length / 2];
+    } else {
+      if (line.length % 2 !== 1) {
+        throw new Error(
+          `Illegal star board "${id}": ${line.axis}-line at index ${line.index} ` +
+            `has even length ${line.length}; every line needs 2h+1 cells ` +
+            `(h of each colour plus one special).`,
+        );
+      }
+      line.targets = [(line.length - 1) / 2, (line.length - 1) / 2, 1];
     }
   }
 
@@ -72,7 +92,15 @@ export function buildBoard(id: string, blockDefs: BlockDef[]): Board {
     for (const ci of line.cells) linesOf[ci]!.push(li);
   });
 
-  return { id, order, cellIndex, lines, linesOf, blocks: blockDefs };
+  return {
+    id,
+    order,
+    cellIndex,
+    lines,
+    linesOf,
+    blocks: blockDefs,
+    colours: variant === "classic" ? 2 : 3,
+  };
 }
 
 /** Split a coordinate-sorted cell list into maximal runs of adjacent coords. */
@@ -100,5 +128,6 @@ function makeLine(
   cellIndex: Map<string, number>,
 ): Line {
   const cells = run.map((cell) => cellIndex.get(cellId(cell.r, cell.c))!);
-  return { axis, index, cells, length: cells.length };
+  // targets is filled in after validation, once the variant's parity is known.
+  return { axis, index, cells, length: cells.length, targets: [] };
 }

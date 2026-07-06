@@ -4,7 +4,8 @@ import { cellId } from "./types.js";
 /**
  * Render a board assignment as ASCII, laid out by (row, col) so offset blocks
  * appear staggered (matching the spec §9 fixtures). Glyphs: `#`=1, `.`=0,
- * and the `empty` glyph (default `·`) for unassigned cells.
+ * `*`=2 (the star variant's special), and the `empty` glyph (default `·`)
+ * for unassigned cells.
  */
 export function renderAscii(
   board: Board,
@@ -40,7 +41,7 @@ export function renderAscii(
         continue;
       }
       const v = assignment.get(cellId(r, c));
-      glyphs.push(v === 1 ? "#" : v === 0 ? "." : empty);
+      glyphs.push(v === 1 ? "#" : v === 0 ? "." : v === 2 ? "*" : empty);
     }
     lines.push(`${pad("r" + r, rowLabelWidth + 1)} ${glyphs.join(" ")}`);
   }

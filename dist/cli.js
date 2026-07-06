@@ -10,8 +10,9 @@ import { renderAscii } from "./render.js";
  *
  *   tsx src/cli.ts --board 6-6-8 --difficulty hard --seed 123 [--passes 30]
  *
- * --board is either "reference" or a "-"-joined list of even square sizes
- * (each 6..14), e.g. "6-6", "6-6-8", "8-8".
+ * --board is "reference", a "-"-joined list of even square sizes (each 6..14,
+ * e.g. "6-6", "6-6-8", "8-8"), or a star-variant token "s7" | "s9" | "s11" |
+ * "s15" (odd square; each line holds one special on top of the colour balance).
  */
 function main() {
     const { values } = parseArgs({
@@ -33,7 +34,7 @@ function main() {
     }
     catch (err) {
         console.error(err.message);
-        console.error('Use "reference" or even sizes like "6-6-8" (each 6..14).');
+        console.error('Use "reference", even sizes like "6-6-8" (each 6..14), or a star board "s7" | "s9" | "s11" | "s15".');
         process.exit(1);
     }
     const seed = Number(values.seed);

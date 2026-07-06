@@ -1,5 +1,6 @@
 import {
   EMPTY,
+  SPECIAL,
   assignmentToState,
   cloneState,
   collectViolations,
@@ -10,7 +11,9 @@ import {
   nextForcedMove,
   parseArrSeed,
   parseBoardToken,
+  parseStarSize,
   resolveBoard,
+  starBoardToken,
   type Board,
   type Difficulty,
   type Rating,
@@ -25,6 +28,13 @@ type Status = "generating" | "playing" | "solved";
 const TIER_LABEL: Record<number, string> = {
   1: "no-three (a colour can't appear 3× in a row)",
   2: "line balance (a line needs equal counts)",
+  3: "line enumeration (only one completion fits)",
+};
+
+/** Star-variant hint wording: tiers 1-2 gain star-flavoured deductions. */
+const STAR_TIER_LABEL: Record<number, string> = {
+  1: "no-three (both pencils blocked here — must be the star)",
+  2: "line counts (a pencil is used up, or only one spot fits the star)",
   3: "line enumeration (only one completion fits)",
 };
 
@@ -65,6 +75,10 @@ export class Game {
   firstColor = $state<0 | 1>(loadFirstColor());
 
   // --- derived ---
+  /** True when the current board is the star variant (3 cell states). */
+  isStar = $derived(this.board.colours === 3);
+  /** The star board's size (7|9|11|15), or null on classic boards. */
+  starSize = $derived(parseStarSize(this.boardId));
   violations = $derived(collectViolations(this.player, this.board));
   solved = $derived(
     this.player.length > 0 && isValidSolution(this.player, this.board),
@@ -142,8 +156,19 @@ export class Game {
   /** New puzzle on the current shape (same board), fresh clues. */
   newPuzzle(difficulty: Difficulty = this.difficulty): void {
     this.generate({
-      board: boardToken(this.sizes, this.arrSeed ?? undefined),
+      board: this.isStar
+        ? this.boardId
+        : boardToken(this.sizes, this.arrSeed ?? undefined),
       difficulty,
+      seed: randomSeed(),
+    });
+  }
+
+  /** Switch to (or resize) a star-variant board, with a fresh puzzle. */
+  setStarSize(size: number): void {
+    this.generate({
+      board: starBoardToken(size),
+      difficulty: this.difficulty,
       seed: randomSeed(),
     });
   }
@@ -184,15 +209,20 @@ export class Game {
   }
 
   /**
-   * Tap a cell: EMPTY -> first colour -> other colour -> EMPTY. The first colour
-   * is the configurable `firstColor` (default black). Clue cells are locked, and
-   * taps are ignored while the solution is revealed.
+   * Tap a cell: EMPTY -> first colour -> other colour -> (star ->) EMPTY. The
+   * first colour is the configurable `firstColor` (default black); the star
+   * step only exists on star-variant boards. Clue cells are locked, and taps
+   * are ignored while the solution is revealed.
    */
   cycle(idx: number): void {
     if (this.status !== "playing" || this.revealed || this.clueSet.has(idx)) return;
     const cur = this.player[idx]!;
     const other = (this.firstColor ^ 1) as 0 | 1;
-    const next = cur === EMPTY ? this.firstColor : cur === this.firstColor ? other : EMPTY;
+    let next: number;
+    if (cur === EMPTY) next = this.firstColor;
+    else if (cur === this.firstColor) next = other;
+    else if (cur === other && this.isStar) next = SPECIAL;
+    else next = EMPTY;
     this.#commit(idx, next);
   }
 
@@ -269,7 +299,7 @@ export class Game {
     }
     this.#commit(move.cellIdx, move.val);
     this.hintCell = move.cellIdx;
-    this.message = `Hint: ${TIER_LABEL[move.tier]}.`;
+    this.message = `Hint: ${(this.isStar ? STAR_TIER_LABEL : TIER_LABEL)[move.tier]}.`;
   }
 
   #ensureTimer(): void {

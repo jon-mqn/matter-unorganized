@@ -5,6 +5,8 @@
  * A cell's colour is 0 (white) or 1 (black). Board geometry is defined by a
  * union of rectangular blocks; lines are derived generically (§3.2).
  */
+/** The third cell state on star boards: exactly one per line. */
+export const SPECIAL = 2;
 export const EMPTY = -1;
 export function cellId(r, c) {
     return `${r},${c}`;
