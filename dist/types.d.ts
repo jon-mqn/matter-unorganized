@@ -35,8 +35,8 @@ export interface Line {
     cells: number[];
     length: number;
     /**
-     * Required count per colour in the completed line (R2, generalised).
-     * Classic boards: [L/2, L/2]. Star boards: [(L-1)/2, (L-1)/2, 1].
+     * Required count per colour in the completed line (R2, generalised):
+     * [(L-1)/2, (L-1)/2, 1].
      */
     targets: number[];
 }
@@ -56,7 +56,7 @@ export interface Board {
     linesOf: number[][];
     /** The source square blocks (1-indexed rects), for rendering block regions. */
     blocks: BlockDef[];
-    /** Number of cell states: 2 (classic) or 3 (star variant with specials). */
+    /** Number of cell states: 3 (two pencil colours plus the star). */
     colours: number;
 }
 /**
@@ -67,14 +67,15 @@ export type State = Int8Array;
 export declare const EMPTY = -1;
 /** A partial or total assignment exposed at the public API boundary. */
 export type Assignment = Map<CellId, Colour>;
-export type Difficulty = "easy" | "medium" | "hard";
-export type Rating = "easy" | "medium" | "hard" | "unfair";
+export type Difficulty = "normal" | "hard" | "really";
+export type Rating = "normal" | "hard" | "really" | "unfair";
 export type Status = "solved" | "stuck" | "contradiction";
 /** Per-tier invocation counts from the logic solver (§4.5). */
 export interface TierCounts {
     tier1: number;
     tier2: number;
     tier3: number;
+    tier4: number;
 }
 export interface LogicResult {
     state: State;

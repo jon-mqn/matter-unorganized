@@ -6,48 +6,14 @@ import {
   resolveBoard,
   starBoardToken,
 } from "../src/boards.js";
-import { EMPTY, SPECIAL, cellId, type Board, type State } from "../src/types.js";
-import { emptyState, assignmentToState } from "../src/state.js";
+import { EMPTY, SPECIAL } from "../src/types.js";
+import { emptyState, assignmentToState, stateToAssignment } from "../src/state.js";
 import { isValidSolution } from "../src/rules.js";
-import { tier1Moves, tier2Moves, tier3Moves } from "../src/tactics.js";
-import { logicSolve } from "../src/logic.js";
+import { tier1Moves, tier2Moves, tier3Moves, tier4Moves } from "../src/tactics.js";
+import { logicSolve, nextForcedMove } from "../src/logic.js";
 import { generate } from "../src/generate.js";
 import { makeRng } from "../src/rng.js";
-
-/** Engine-verified 7×7 star solution (from `gen --board s7 --seed 1`). */
-const S7_SOLUTION = [
-  "* . # . . # #",
-  "# * . # # . .",
-  ". # # . * # .",
-  "# . # . # . *",
-  ". . * # # . #",
-  "# # . * . # .",
-  ". # . # . * #",
-];
-
-function parseGrid(board: Board, rows: string[]): State {
-  const state = emptyState(board);
-  rows.forEach((row, ri) => {
-    row
-      .trim()
-      .split(/\s+/)
-      .forEach((g, ci) => {
-        const idx = board.cellIndex.get(cellId(ri + 1, ci + 1))!;
-        if (g === "#") state[idx] = 1;
-        else if (g === ".") state[idx] = 0;
-        else if (g === "*") state[idx] = SPECIAL;
-      });
-  });
-  return state;
-}
-
-function set(board: Board, state: State, r: number, c: number, v: number) {
-  state[board.cellIndex.get(cellId(r, c))!] = v;
-}
-
-function at(board: Board, r: number, c: number): number {
-  return board.cellIndex.get(cellId(r, c))!;
-}
+import { S7_SOLUTION, at, parseGrid, set } from "./fixtures.js";
 
 describe("star board build", () => {
   const board = buildStarBoard(7);
@@ -62,9 +28,9 @@ describe("star board build", () => {
     }
   });
 
-  it("rejects even-length lines in star mode", () => {
+  it("rejects even-length lines", () => {
     expect(() =>
-      buildBoard("bad", [{ rowStart: 1, rowEnd: 6, colStart: 1, colEnd: 6 }], "star"),
+      buildBoard("bad", [{ rowStart: 1, rowEnd: 6, colStart: 1, colEnd: 6 }]),
     ).toThrow(/even length/);
   });
 
@@ -76,6 +42,7 @@ describe("star board build", () => {
     expect(starBoardToken(9)).toBe("s9");
     expect(resolveBoard("s9").order.length).toBe(81);
     expect(() => buildStarBoard(6)).toThrow(/must be one of/);
+    expect(() => resolveBoard("6-6")).toThrow(/Invalid board/);
   });
 });
 
@@ -179,6 +146,49 @@ describe("star tactics", () => {
   });
 });
 
+describe("tier 4 (trial to contradiction)", () => {
+  const board = buildStarBoard(7);
+  // A "really" puzzle: solvable only with tier 4 in the mix.
+  const puzzle = generate(board, "really", makeRng(1), { passes: 4, attempts: 20 });
+
+  it("generates a puzzle beyond tier 3 but within tier 4", () => {
+    expect(puzzle.rating).toBe("really");
+    expect(puzzle.counts.tier4).toBeGreaterThanOrEqual(1);
+    expect(logicSolve(puzzle.clues, board, 3).status).not.toBe("solved");
+    expect(logicSolve(puzzle.clues, board, 4).status).toBe("solved");
+  });
+
+  it("is sound: every tier-4 move matches the real solution", () => {
+    // Run tiers 1-3 to their fixpoint, then ask tier 4 directly.
+    const { state, status } = logicSolve(puzzle.clues, board, 3);
+    expect(status).toBe("stuck");
+    const res = tier4Moves(state, board);
+    expect(res.contradiction).toBe(false);
+    expect(res.moves.size).toBeGreaterThanOrEqual(1);
+    const solution = assignmentToState(board, puzzle.solution);
+    for (const [idx, val] of res.moves) {
+      expect(val).toBe(solution[idx]);
+    }
+  });
+
+  it("powers a tier-4 hint via nextForcedMove", () => {
+    const { state } = logicSolve(puzzle.clues, board, 3);
+    const move = nextForcedMove(state, board, 4);
+    expect(move).not.toBeNull();
+    expect(move!.tier).toBe(4);
+    const solution = assignmentToState(board, puzzle.solution);
+    expect(move!.val).toBe(solution[move!.cellIdx]);
+  });
+
+  it("solver flags an unsolvable position before tier 4 is reached", () => {
+    const state = emptyState(board);
+    set(board, state, 1, 1, SPECIAL);
+    set(board, state, 1, 3, SPECIAL); // row 1 can never complete
+    const clues = stateToAssignment(board, state);
+    expect(logicSolve(clues, board, 4).status).toBe("contradiction");
+  });
+});
+
 describe("star generation", () => {
   const board = buildStarBoard(7);
 
@@ -197,8 +207,8 @@ describe("star generation", () => {
   });
 
   it("is deterministic for a given seed", () => {
-    const a = generate(board, "medium", makeRng(7), { passes: 6, attempts: 8 });
-    const b = generate(board, "medium", makeRng(7), { passes: 6, attempts: 8 });
+    const a = generate(board, "normal", makeRng(7), { passes: 6, attempts: 8 });
+    const b = generate(board, "normal", makeRng(7), { passes: 6, attempts: 8 });
     expect([...a.clues.entries()]).toEqual([...b.clues.entries()]);
     expect([...a.solution.entries()]).toEqual([...b.solution.entries()]);
     expect(a.rating).toBe(b.rating);

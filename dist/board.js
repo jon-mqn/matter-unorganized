@@ -1,12 +1,11 @@
 import { cellId } from "./types.js";
 /**
  * Build a board from a union of rectangular blocks (§3.2). Line construction is
- * fully generic — it works for any union of blocks (stacked, offset, pinwheel,
- * with or without true overlap) with no special-casing. Classic boards require
- * every line length to be even (§2.1: R2 would be unsatisfiable otherwise);
- * star boards require every line length to be odd (2h + 1 special).
+ * fully generic — it works for any union of blocks with no special-casing.
+ * Every line length must be odd (2h + 1: h of each colour plus one special),
+ * or R2 would be unsatisfiable.
  */
-export function buildBoard(id, blockDefs, variant = "classic") {
+export function buildBoard(id, blockDefs) {
     // 1. Union all block cells into a de-duplicated set.
     const cellSet = new Map();
     for (const b of blockDefs) {
@@ -49,21 +48,12 @@ export function buildBoard(id, blockDefs, variant = "classic") {
     }
     // 4. Validate line-length parity and derive per-colour targets (R2).
     for (const line of lines) {
-        if (variant === "classic") {
-            if (line.length % 2 !== 0) {
-                throw new Error(`Illegal board "${id}": ${line.axis}-line at index ${line.index} has ` +
-                    `odd length ${line.length}; every line length must be even (R2).`);
-            }
-            line.targets = [line.length / 2, line.length / 2];
+        if (line.length % 2 !== 1) {
+            throw new Error(`Illegal star board "${id}": ${line.axis}-line at index ${line.index} ` +
+                `has even length ${line.length}; every line needs 2h+1 cells ` +
+                `(h of each colour plus one special).`);
         }
-        else {
-            if (line.length % 2 !== 1) {
-                throw new Error(`Illegal star board "${id}": ${line.axis}-line at index ${line.index} ` +
-                    `has even length ${line.length}; every line needs 2h+1 cells ` +
-                    `(h of each colour plus one special).`);
-            }
-            line.targets = [(line.length - 1) / 2, (line.length - 1) / 2, 1];
-        }
+        line.targets = [(line.length - 1) / 2, (line.length - 1) / 2, 1];
     }
     // linesOf: per cell order index, which lines contain it (>= 1; overlap cells
     // may have more than 2 — the engine must not assume exactly 2).
@@ -79,7 +69,7 @@ export function buildBoard(id, blockDefs, variant = "classic") {
         lines,
         linesOf,
         blocks: blockDefs,
-        colours: variant === "classic" ? 2 : 3,
+        colours: 3,
     };
 }
 /** Split a coordinate-sorted cell list into maximal runs of adjacent coords. */

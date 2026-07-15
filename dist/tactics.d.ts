@@ -23,9 +23,8 @@ export interface TacticResult {
 export declare function tier1Moves(state: State, board: Board): TacticResult;
 /**
  * Tier 2 — count forcing: window + cap eliminations leaving a single candidate
- * (on classic boards exactly the old balance fill), plus, on star boards, the
- * hidden single for the special: if only one cell of a line can still hold its
- * special, force it there.
+ * (the balance fill), plus the hidden single for the special: if only one cell
+ * of a line can still hold its special, force it there.
  */
 export declare function tier2Moves(state: State, board: Board): TacticResult;
 /**
@@ -34,3 +33,16 @@ export declare function tier2Moves(state: State, board: Board): TacticResult;
  * Flags contradiction if any line has zero valid completions.
  */
 export declare function tier3Moves(state: State, board: Board): TacticResult;
+/**
+ * Tier 4 — trial to contradiction: for an empty cell, tentatively place each
+ * surviving candidate and cascade tiers 1-3 to fixpoint; candidates that reach
+ * a contradiction are eliminated. A cell with exactly one survivor is forced;
+ * a cell with none is a contradiction. Still guess-free from the player's
+ * perspective: the forced move is certain, only the justification is "every
+ * other option runs into a dead end".
+ *
+ * Returns after the first forced move found — trials are expensive (each runs
+ * a full tier-1..3 solve) and `logicSolve` restarts from tier 1 after any move
+ * anyway, so finding more than one per invocation buys nothing.
+ */
+export declare function tier4Moves(state: State, board: Board): TacticResult;

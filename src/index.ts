@@ -1,26 +1,11 @@
 export * from "./types.js";
-export { buildBoard, type Variant } from "./board.js";
+export { buildBoard } from "./board.js";
 export {
-  REFERENCE_BLOCKS,
   STAR_SIZES,
   starBoardToken,
   parseStarSize,
   buildStarBoard,
-  referenceBoardBuild,
-  BOARD_REGISTRY,
-  MIN_SIZE,
-  MAX_SIZE,
-  MAX_BLOCKS,
-  MAX_CELLS,
-  validateSizes,
   generationBudget,
-  stackedBlockDefs,
-  stackedBoardId,
-  buildStackedBoard,
-  arrangeBlocks,
-  boardToken,
-  parseArrSeed,
-  parseBoardToken,
   resolveBoard,
 } from "./boards.js";
 export { makeRng, shuffle, deriveSeed } from "./rng.js";
@@ -39,7 +24,7 @@ export {
   collectViolations,
 } from "./rules.js";
 export { countSolutions, randomSolution } from "./solver.js";
-export { tier1Moves, tier2Moves, tier3Moves } from "./tactics.js";
+export { tier1Moves, tier2Moves, tier3Moves, tier4Moves } from "./tactics.js";
 export {
   logicSolve,
   rate,

@@ -1,18 +1,19 @@
 import { assignmentToState, filledCount } from "./state.js";
-import { tier1Moves, tier2Moves, tier3Moves, } from "./tactics.js";
+import { tier1Moves, tier2Moves, tier3Moves, tier4Moves, } from "./tactics.js";
 const TACTICS = [
     tier1Moves,
     tier2Moves,
     tier3Moves,
+    tier4Moves,
 ];
 /**
  * No-guessing logic solver (§4.4). Repeatedly applies the *lowest* tier (up to
  * `maxTier`) that yields at least one new move, to fixpoint. Records per-tier
  * invocation counts so difficulty can be measured (§4.5).
  */
-export function logicSolve(clues, board, maxTier = 3) {
+export function logicSolve(clues, board, maxTier = 4) {
     const state = assignmentToState(board, clues);
-    const counts = { tier1: 0, tier2: 0, tier3: 0 };
+    const counts = { tier1: 0, tier2: 0, tier3: 0, tier4: 0 };
     let topTier = 0;
     for (;;) {
         let progressed = false;
@@ -38,20 +39,20 @@ export function logicSolve(clues, board, maxTier = 3) {
 }
 /** Difficulty rating (§4.5): run the full tier set and map the highest used. */
 export function rate(clues, board) {
-    const { status, counts, topTier } = logicSolve(clues, board, 3);
+    const { status, counts, topTier } = logicSolve(clues, board, 4);
     let rating;
     if (status !== "solved")
         rating = "unfair";
-    else if (topTier >= 3)
+    else if (topTier >= 4)
+        rating = "really";
+    else if (topTier === 3)
         rating = "hard";
-    else if (topTier === 2)
-        rating = "medium";
     else
-        rating = "easy"; // tier1-only (topTier 1, or 0 if clues already complete)
+        rating = "normal"; // tiers 1-2 (star boards have no viable tier-1 band)
     return { rating, topTier, counts };
 }
 /** True if the clue set is fully solvable by deduction within `maxTier`. */
-export function isFullySolved(clues, board, maxTier = 3) {
+export function isFullySolved(clues, board, maxTier = 4) {
     return logicSolve(clues, board, maxTier).status === "solved";
 }
 /**
@@ -59,7 +60,7 @@ export function isFullySolved(clues, board, maxTier = 3) {
  * fires (up to `maxTier`), without mutating `state`. Returns null if no tier
  * forces a move (stuck, solved, or contradictory). Powers the UI hint feature.
  */
-export function nextForcedMove(state, board, maxTier = 3) {
+export function nextForcedMove(state, board, maxTier = 4) {
     for (let tier = 1; tier <= maxTier; tier++) {
         const res = TACTICS[tier - 1](state, board);
         if (res.contradiction)

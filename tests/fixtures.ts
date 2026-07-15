@@ -1,74 +1,49 @@
-import type { Assignment } from "../src/types.js";
-import { cellId } from "../src/types.js";
+import type { Board, State } from "../src/types.js";
+import { SPECIAL, cellId } from "../src/types.js";
+import { emptyState } from "../src/state.js";
 
 /**
- * Reference fixtures from spec §9. Grids are given as space-separated glyphs:
- * `#`=1, `.`=0, `·`(or any other char)=empty. Top block occupies rows 1-6 /
- * cols 1-6; bottom block rows 7-12 / cols 4-9.
+ * Star-board fixtures. Grids are space-separated glyphs: `#`=1, `.`=0,
+ * `*`=star, anything else = empty. Rows/columns are 1-based from the top-left.
  */
-function parseBlock(
-  rows: string[],
-  rowStart: number,
-  colStart: number,
-): [string, 0 | 1][] {
-  const out: [string, 0 | 1][] = [];
+
+/** Hand-verified 7×7 star solution (3 of each colour + one star per line). */
+export const S7_SOLUTION = [
+  "* . # . . # #",
+  "# * . # # . .",
+  ". # # . * # .",
+  "# . # . # . *",
+  ". . * # # . #",
+  "# # . * . # .",
+  ". # . # . * #",
+];
+
+export function parseGrid(board: Board, rows: string[]): State {
+  const state = emptyState(board);
   rows.forEach((row, ri) => {
-    const glyphs = row.trim().split(/\s+/);
-    glyphs.forEach((g, ci) => {
-      if (g === "#") out.push([cellId(rowStart + ri, colStart + ci), 1]);
-      else if (g === ".") out.push([cellId(rowStart + ri, colStart + ci), 0]);
-      // anything else = empty, skip
-    });
+    row
+      .trim()
+      .split(/\s+/)
+      .forEach((g, ci) => {
+        const idx = board.cellIndex.get(cellId(ri + 1, ci + 1))!;
+        if (g === "#") state[idx] = 1;
+        else if (g === ".") state[idx] = 0;
+        else if (g === "*") state[idx] = SPECIAL;
+      });
   });
-  return out;
+  return state;
 }
 
-function assignment(entries: [string, 0 | 1][]): Assignment {
-  return new Map(entries);
+export function set(
+  board: Board,
+  state: State,
+  r: number,
+  c: number,
+  v: number,
+): void {
+  state[board.cellIndex.get(cellId(r, c))!] = v;
 }
 
-// §9 verified valid solution.
-const SOLUTION_TOP = [
-  ". # . # # .",
-  ". # # . # .",
-  "# . # . . #",
-  "# . . # # .",
-  ". # # . . #",
-  "# . . # # .",
-];
-const SOLUTION_BOTTOM = [
-  "# . . # . #",
-  ". . # # . #",
-  ". # # . # .",
-  "# # . . # .",
-  ". . # # . #",
-  "# . # . # .",
-];
-
-export const REFERENCE_SOLUTION: Assignment = assignment([
-  ...parseBlock(SOLUTION_TOP, 1, 1),
-  ...parseBlock(SOLUTION_BOTTOM, 7, 4),
-]);
-
-// §9 verified deduction-only puzzle (13 clues, rates Hard).
-const PUZZLE_TOP = [
-  "· · · · · .",
-  "· · # · # ·",
-  "# · # · · ·",
-  "· . · · · ·",
-  "· · # · · ·",
-  "· . · · # ·",
-];
-const PUZZLE_BOTTOM = [
-  "· · . · · #",
-  "· · · · · ·",
-  "· # · · · ·",
-  "· · · . · ·",
-  "· · · · · ·",
-  "· · · · · ·",
-];
-
-export const REFERENCE_PUZZLE_13: Assignment = assignment([
-  ...parseBlock(PUZZLE_TOP, 1, 1),
-  ...parseBlock(PUZZLE_BOTTOM, 7, 4),
-]);
+export function at(board: Board, r: number, c: number): number {
+  return board.cellIndex.get(cellId(r, c))!;
+}

@@ -12,7 +12,7 @@ export declare function isFullySolved(clues: Assignment, board: Board, maxTier?:
 export interface ForcedMove {
     cellIdx: number;
     val: Colour;
-    /** The lowest tier (1-3) that forces this move — used to explain the hint. */
+    /** The lowest tier (1-4) that forces this move — used to explain the hint. */
     tier: number;
 }
 /**

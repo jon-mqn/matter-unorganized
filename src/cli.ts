@@ -10,16 +10,15 @@ import { renderAscii } from "./render.js";
  * the solution, the rating, and per-tier invocation counts. Deterministic for a
  * given --seed.
  *
- *   tsx src/cli.ts --board 6-6-8 --difficulty hard --seed 123 [--passes 30]
+ *   tsx src/cli.ts --board s7 --difficulty hard --seed 123 [--passes 30]
  *
- * --board is "reference", a "-"-joined list of even square sizes (each 6..14,
- * e.g. "6-6", "6-6-8", "8-8"), or a star-variant token "s7" | "s9" | "s11" |
- * "s15" (odd square; each line holds one special on top of the colour balance).
+ * --board is a star token "s7" | "s9" | "s11" | "s15" (odd square; each line
+ * holds one star on top of the colour balance).
  */
 function main(): void {
   const { values } = parseArgs({
     options: {
-      board: { type: "string", default: "reference" },
+      board: { type: "string", default: "s7" },
       difficulty: { type: "string", default: "hard" },
       seed: { type: "string", default: "1" },
       passes: { type: "string", default: "30" },
@@ -27,8 +26,8 @@ function main(): void {
   });
 
   const difficulty = values.difficulty as Difficulty;
-  if (!["easy", "medium", "hard"].includes(difficulty)) {
-    console.error(`Unknown difficulty "${difficulty}". Use easy | medium | hard.`);
+  if (!["normal", "hard", "really"].includes(difficulty)) {
+    console.error(`Unknown difficulty "${difficulty}". Use normal | hard | really.`);
     process.exit(1);
   }
 
@@ -37,9 +36,7 @@ function main(): void {
     board = resolveBoard(values.board!);
   } catch (err) {
     console.error((err as Error).message);
-    console.error(
-      'Use "reference", even sizes like "6-6-8" (each 6..14), or a star board "s7" | "s9" | "s11" | "s15".',
-    );
+    console.error('Use a star board "s7" | "s9" | "s11" | "s15".');
     process.exit(1);
   }
   const seed = Number(values.seed);
@@ -51,7 +48,8 @@ function main(): void {
   console.log(`Seed:       ${seed}`);
   console.log(`Clues:      ${puzzle.clues.size}`);
   console.log(
-    `Tiers:      t1=${puzzle.counts.tier1} t2=${puzzle.counts.tier2} t3=${puzzle.counts.tier3}`,
+    `Tiers:      t1=${puzzle.counts.tier1} t2=${puzzle.counts.tier2} ` +
+      `t3=${puzzle.counts.tier3} t4=${puzzle.counts.tier4}`,
   );
   console.log("\nPuzzle:");
   console.log(renderAscii(board, puzzle.clues));

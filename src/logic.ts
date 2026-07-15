@@ -15,12 +15,14 @@ import {
   tier1Moves,
   tier2Moves,
   tier3Moves,
+  tier4Moves,
 } from "./tactics.js";
 
 const TACTICS: ((state: Int8Array, board: Board) => TacticResult)[] = [
   tier1Moves,
   tier2Moves,
   tier3Moves,
+  tier4Moves,
 ];
 
 /**
@@ -31,10 +33,10 @@ const TACTICS: ((state: Int8Array, board: Board) => TacticResult)[] = [
 export function logicSolve(
   clues: Assignment,
   board: Board,
-  maxTier = 3,
+  maxTier = 4,
 ): LogicResult {
   const state = assignmentToState(board, clues);
-  const counts: TierCounts = { tier1: 0, tier2: 0, tier3: 0 };
+  const counts: TierCounts = { tier1: 0, tier2: 0, tier3: 0, tier4: 0 };
   let topTier = 0;
 
   for (;;) {
@@ -61,12 +63,12 @@ export function logicSolve(
 
 /** Difficulty rating (§4.5): run the full tier set and map the highest used. */
 export function rate(clues: Assignment, board: Board): RateResult {
-  const { status, counts, topTier } = logicSolve(clues, board, 3);
+  const { status, counts, topTier } = logicSolve(clues, board, 4);
   let rating: Rating;
   if (status !== "solved") rating = "unfair";
-  else if (topTier >= 3) rating = "hard";
-  else if (topTier === 2) rating = "medium";
-  else rating = "easy"; // tier1-only (topTier 1, or 0 if clues already complete)
+  else if (topTier >= 4) rating = "really";
+  else if (topTier === 3) rating = "hard";
+  else rating = "normal"; // tiers 1-2 (star boards have no viable tier-1 band)
   return { rating, topTier, counts };
 }
 
@@ -74,7 +76,7 @@ export function rate(clues: Assignment, board: Board): RateResult {
 export function isFullySolved(
   clues: Assignment,
   board: Board,
-  maxTier = 3,
+  maxTier = 4,
 ): boolean {
   return logicSolve(clues, board, maxTier).status === "solved";
 }
@@ -82,7 +84,7 @@ export function isFullySolved(
 export interface ForcedMove {
   cellIdx: number;
   val: Colour;
-  /** The lowest tier (1-3) that forces this move — used to explain the hint. */
+  /** The lowest tier (1-4) that forces this move — used to explain the hint. */
   tier: number;
 }
 
@@ -94,7 +96,7 @@ export interface ForcedMove {
 export function nextForcedMove(
   state: State,
   board: Board,
-  maxTier = 3,
+  maxTier = 4,
 ): ForcedMove | null {
   for (let tier = 1; tier <= maxTier; tier++) {
     const res = TACTICS[tier - 1]!(state, board);

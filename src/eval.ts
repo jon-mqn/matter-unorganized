@@ -9,7 +9,7 @@ import { randomSolution } from "./solver.js";
 import { stateToAssignment } from "./state.js";
 
 /**
- * Difficulty study for the star variant vs classic Unruly. For each board ×
+ * Difficulty study for the star boards. For each board ×
  * difficulty × seed it runs the full shipped generation pipeline (same budgets
  * as the web worker) and records the band hit rate, clue density, per-tier
  * solver work, and wall time. A second pass measures, per board, how often a
@@ -20,8 +20,8 @@ import { stateToAssignment } from "./state.js";
  *   npm run eval          # writes star-eval.md and prints it
  */
 
-const BOARDS = ["6-6", "s7", "s9", "s11", "s15"];
-const DIFFS: Difficulty[] = ["easy", "medium", "hard"];
+const BOARDS = ["s7", "s9", "s11", "s15"];
+const DIFFS: Difficulty[] = ["normal", "hard", "really"];
 
 /** Seeds per (board, difficulty): fewer on big boards to keep runtime sane. */
 function seedCount(cells: number): number {
@@ -41,6 +41,7 @@ interface GenRow {
   t1: number[];
   t2: number[];
   t3: number[];
+  t4: number[];
   ms: number[];
 }
 
@@ -53,9 +54,9 @@ function runGeneration(): GenRow[] {
   for (const token of BOARDS) {
     const board = resolveBoard(token);
     const cells = board.order.length;
-    const budget = generationBudget(cells);
     const n = seedCount(cells);
     for (const difficulty of DIFFS) {
+      const budget = generationBudget(cells, difficulty);
       const row: GenRow = {
         board: token,
         cells,
@@ -67,6 +68,7 @@ function runGeneration(): GenRow[] {
         t1: [],
         t2: [],
         t3: [],
+        t4: [],
         ms: [],
       };
       for (let seed = 1; seed <= n; seed++) {
@@ -79,6 +81,7 @@ function runGeneration(): GenRow[] {
         row.t1.push(puzzle.counts.tier1);
         row.t2.push(puzzle.counts.tier2);
         row.t3.push(puzzle.counts.tier3);
+        row.t4.push(puzzle.counts.tier4);
       }
       rows.push(row);
       console.error(
@@ -108,7 +111,7 @@ function runStuckStudy(): StuckRow[] {
       const solution = randomSolution(board, makeRng(seed));
       const clues = reduceUnique(solution, board, makeRng(seed + 1000), 2);
       row.clues.push(clues.size);
-      if (logicSolve(clues, board, 3).status !== "solved") row.stuck++;
+      if (logicSolve(clues, board, 4).status !== "solved") row.stuck++;
     }
     rows.push(row);
     console.error(`  ${token}: ${row.stuck}/${row.n} uniqueness-minimal puzzles need guessing`);
@@ -130,10 +133,7 @@ function main(): void {
       "(including any hand-written findings).",
   );
   lines.push(
-    "Classic `6-6` (the reference Frankengrid, 72 cells) is the baseline; `sN` are",
-  );
-  lines.push(
-    "the star-variant odd squares (each line: (n−1)/2 white, (n−1)/2 black, 1 star).",
+    "Boards `sN` are odd squares (each line: (n−1)/2 white, (n−1)/2 black, 1 star).",
   );
   lines.push("");
   lines.push("## Generation study");
@@ -149,7 +149,7 @@ function main(): void {
   );
   lines.push("");
   lines.push(
-    "| board | cells | difficulty | N | band hit | ratings seen | avg clues | clue % | tiers t1/t2/t3 | avg gen ms |",
+    "| board | cells | difficulty | N | band hit | ratings seen | avg clues | clue % | tiers t1/t2/t3/t4 | avg gen ms |",
   );
   lines.push("|---|---|---|---|---|---|---|---|---|---|");
   for (const r of gen) {
@@ -159,7 +159,7 @@ function main(): void {
     lines.push(
       `| ${r.board} | ${r.cells} | ${r.difficulty} | ${r.n} | ${pct(r.hits / r.n)} | ${ratings} | ` +
         `${f1(avg(r.clues))} | ${pct(avg(r.clues) / r.cells)} | ` +
-        `${f1(avg(r.t1))}/${f1(avg(r.t2))}/${f1(avg(r.t3))} | ${Math.round(avg(r.ms))} |`,
+        `${f1(avg(r.t1))}/${f1(avg(r.t2))}/${f1(avg(r.t3))}/${f1(avg(r.t4))} | ${Math.round(avg(r.ms))} |`,
     );
   }
   lines.push("");

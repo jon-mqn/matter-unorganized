@@ -14,6 +14,13 @@
   <span class="stat">{fmt(game.elapsed)}</span>
   <span class="sep">·</span>
   <span class="stat">{game.filled}/{game.total} filled</span>
+  {#if game.showStarCounts}
+    <span class="sep">·</span>
+    <span class="stat stars">
+      <img class="star-icon" src={game.doodles.star.url} alt="stars" />
+      {game.starsPlaced}/{game.starsTotal}
+    </span>
+  {/if}
   {#if game.rating}
     <span class="sep">·</span>
     <span class="stat rating">{game.rating}</span>
@@ -40,6 +47,15 @@
   }
   .sep {
     color: var(--grid-major);
+  }
+  .stars {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .star-icon {
+    width: 1em;
+    height: 1em;
   }
   .rating {
     text-transform: uppercase;

@@ -1,23 +1,29 @@
 import type { Assignment, Board, Colour, Rng, State } from "./types.js";
-import { EMPTY } from "./types.js";
+import { EMPTY, SPECIAL } from "./types.js";
 import { legal } from "./rules.js";
 import { shuffle } from "./rng.js";
 import { assignmentToState, cloneState, emptyState } from "./state.js";
 
+/** Coin-flip try-order over the two pencil colours for one cell of the fill. */
+function randomColourOrder(rng: Rng): Colour[] {
+  const first = rng() < 0.5 ? 0 : 1;
+  return [first as Colour, (first ^ 1) as Colour];
+}
+
 /**
- * Colour try-order for one cell of the random fill. The 2-colour path consumes
- * exactly one rng() call (a coin flip), byte-identical to the original binary
- * implementation, so classic seeds keep producing the same puzzles.
+ * Pre-place one star per row at a uniformly random column permutation. A
+ * permutation puts exactly one star in every row and column, so every star
+ * target is satisfied by construction — no legality check needed.
  */
-function randomColourOrder(colours: number, rng: Rng): Colour[] {
-  if (colours === 2) {
-    const first = rng() < 0.5 ? 0 : 1;
-    return [first as Colour, (first ^ 1) as Colour];
-  }
-  return shuffle(
-    Array.from({ length: colours }, (_, c) => c as Colour),
+function placeStars(state: State, board: Board, rng: Rng): void {
+  const rows = board.lines.filter((l) => l.axis === "row");
+  const perm = shuffle(
+    Array.from({ length: rows.length }, (_, i) => i),
     rng,
   );
+  rows.forEach((line, r) => {
+    state[line.cells[perm[r]!]!] = SPECIAL;
+  });
 }
 
 /**
@@ -59,15 +65,21 @@ export function countSolutions(
 }
 
 /**
- * Generate a random valid solution (§4.3): backtrack from an empty board with
- * the colour order randomised per cell. Returns the first completed fill.
- * Deterministic given `rng`.
+ * Generate a random valid solution (§4.3): place the stars as an explicitly
+ * uniform permutation, then backtrack-fill the two colours with the try-order
+ * randomised per cell. Deterministic given `rng`.
  *
- * Unruly boards are loosely constrained, so a random fill normally succeeds
+ * The stars must NOT be left to the backtracker: a depth-first fill returns
+ * the first completion it finds, which lands each row's star on the earliest
+ * still-free column — piling stars onto the main diagonal. Sampling the
+ * permutation up front makes every star arrangement equally likely.
+ *
+ * Star boards are loosely constrained, so the colour fill normally succeeds
  * near-linearly — but naive sequential backtracking can occasionally fall into
  * a deep dead-end that takes many seconds to escape (seen on large boards). To
  * bound this, each attempt is capped at a fixed number of steps; if it exceeds
- * the cap it restarts from scratch (advancing `rng`, so still deterministic).
+ * the cap (or the permutation admits no balanced completion) it restarts from
+ * scratch with a fresh permutation (advancing `rng`, so still deterministic).
  * Restarts almost always converge immediately.
  */
 export function randomSolution(board: Board, rng: Rng): State {
@@ -77,16 +89,18 @@ export function randomSolution(board: Board, rng: Rng): State {
 
   for (let restart = 0; restart < maxRestarts; restart++) {
     const state = emptyState(board);
+    placeStars(state, board, rng);
     let steps = 0;
     let aborted = false;
 
     const recurse = (i: number): boolean => {
       if (i === order.length) return true;
+      if (state[i] !== EMPTY) return recurse(i + 1);
       if (++steps > stepCap) {
         aborted = true;
         return false;
       }
-      for (const val of randomColourOrder(board.colours, rng)) {
+      for (const val of randomColourOrder(rng)) {
         if (legal(state, i, val, board)) {
           state[i] = val;
           if (recurse(i + 1)) return true;

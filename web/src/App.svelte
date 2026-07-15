@@ -1,6 +1,6 @@
 <script lang="ts">
   import Board from "./components/Board.svelte";
-  import Config from "./components/Config.svelte";
+  import Settings from "./components/Settings.svelte";
   import Controls from "./components/Controls.svelte";
   import StatusBar from "./components/StatusBar.svelte";
   import { Game } from "./lib/game.svelte.js";
@@ -11,8 +11,8 @@
   // Load the puzzle described by the URL hash, or a fresh random one.
   const params =
     decodeHash(location.hash) ?? {
-      board: "6-6",
-      difficulty: "medium" as const,
+      board: "s7",
+      difficulty: "normal" as const,
       seed: randomSeed(),
     };
   game.generate(params);
@@ -22,18 +22,21 @@
   <header>
     <h1>Matter unorganized</h1>
     <p class="rules">
-      {#if game.isStar}
-        No three in a row · equal pencils per line · one ✶ in every row &amp; column
-      {:else}
-        No three in a row · each line half graphite, half red
-      {/if}
+     Fill each square such that no three consecutive squares have the same doodle. Each row and column have the same number of doodles and have exactly one star. Inspired by Tohu wa Vohu by Adolfo Zanellati.
     </p>
   </header>
 
   <Controls {game} />
-  <Config {game} />
+  <Settings {game} />
   <Board {game} />
   <StatusBar {game} />
+
+  <footer class="credit">
+    Doodles by
+    <a href="https://github.com/MariaLetta/mega-doodles-pack" target="_blank" rel="noopener">Maria Letta</a>
+    ·
+    <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>
+  </footer>
 </main>
 
 <style>
@@ -66,6 +69,17 @@
     font-family: var(--font-hand);
     color: var(--ink-soft);
     font-size: 1.05rem;
+  }
+
+  /* Artwork attribution, jotted at the foot of the sheet. */
+  .credit {
+    margin-top: 0.5rem;
+    font-family: var(--font-hand);
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+  }
+  .credit a {
+    color: inherit;
   }
 
   /* Notebook margin rule, drawn down the left of the sheet on wider screens. */

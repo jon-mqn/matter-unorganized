@@ -1,16 +1,25 @@
-import { parseBoardToken, parseStarSize, type Difficulty } from "./engine.js";
+import { parseStarSize, type Difficulty } from "./engine.js";
 
 export interface PuzzleParams {
-  /**
-   * Board token: "-"-joined even sizes, e.g. "6-6-8" (also accepts
-   * "reference"), or a star-variant token like "s7".
-   */
+  /** Board token: a star size like "s7". */
   board: string;
   difficulty: Difficulty;
   seed: number;
 }
 
-const DIFFICULTIES: Difficulty[] = ["easy", "medium", "hard"];
+const DIFFICULTIES: Difficulty[] = ["normal", "hard", "really"];
+
+/**
+ * "Really?" (tier-4) generation blows the web time budget above this board
+ * size, so bigger boards are capped at Hard.
+ */
+export const REALLY_MAX_SIZE = 11;
+
+/** Difficulty names from links shared before the normal/hard/really rework. */
+const LEGACY_DIFFICULTY: Record<string, Difficulty> = {
+  easy: "normal",
+  medium: "normal",
+};
 
 /** "#6-6-8/hard/12345" */
 export function encodeParams(p: PuzzleParams): string {
@@ -21,8 +30,11 @@ export function encodeParams(p: PuzzleParams): string {
 export function decodeHash(hash: string): PuzzleParams | null {
   const parts = hash.replace(/^#/, "").split("/");
   if (parts.length !== 3) return null;
-  const [board, difficulty, seedStr] = parts as [string, string, string];
-  if (!parseBoardToken(board) && parseStarSize(board) === null) return null;
+  const [board, rawDifficulty, seedStr] = parts as [string, string, string];
+  const size = parseStarSize(board);
+  if (size === null) return null;
+  let difficulty = LEGACY_DIFFICULTY[rawDifficulty] ?? rawDifficulty;
+  if (difficulty === "really" && size > REALLY_MAX_SIZE) difficulty = "hard";
   if (!DIFFICULTIES.includes(difficulty as Difficulty)) return null;
   const seed = Number(seedStr);
   if (!Number.isInteger(seed) || seed < 0) return null;

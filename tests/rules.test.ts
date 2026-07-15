@@ -1,24 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { referenceBoardBuild } from "../src/boards.js";
+import { buildStarBoard } from "../src/boards.js";
 import { isValidSolution } from "../src/rules.js";
-import { assignmentToState, cloneState } from "../src/state.js";
-import { REFERENCE_SOLUTION } from "./fixtures.js";
+import { cloneState, filledCount } from "../src/state.js";
+import { S7_SOLUTION, parseGrid } from "./fixtures.js";
 
 describe("validity checker (§8.2)", () => {
-  const board = referenceBoardBuild();
-  const solutionState = assignmentToState(board, REFERENCE_SOLUTION);
+  const board = buildStarBoard(7);
+  const solutionState = parseGrid(board, S7_SOLUTION);
 
-  it("accepts the known-good reference solution", () => {
-    expect(REFERENCE_SOLUTION.size).toBe(72);
+  it("accepts the known-good s7 solution", () => {
+    expect(filledCount(solutionState)).toBe(49);
     expect(isValidSolution(solutionState, board)).toBe(true);
   });
 
-  it("rejects the board when any single cell is flipped", () => {
-    // Balance is exact per line, so flipping any one cell breaks R2 on its line.
+  it("rejects the board when any single cell is changed", () => {
+    // Every line's counts are exact, so changing any one cell to either other
+    // value breaks R2 on its row (colour count or star count).
     for (let i = 0; i < solutionState.length; i++) {
-      const flipped = cloneState(solutionState);
-      flipped[i] = (flipped[i]! ^ 1) as 0 | 1;
-      expect(isValidSolution(flipped, board)).toBe(false);
+      for (const delta of [1, 2]) {
+        const changed = cloneState(solutionState);
+        changed[i] = ((changed[i]! + delta) % 3) as 0 | 1 | 2;
+        expect(isValidSolution(changed, board)).toBe(false);
+      }
     }
   });
 });

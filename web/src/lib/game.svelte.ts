@@ -6,11 +6,8 @@ import {
   collectViolations,
   filledCount,
   isValidSolution,
-  boardToken,
   cellId,
   nextForcedMove,
-  parseArrSeed,
-  parseBoardToken,
   parseStarSize,
   resolveBoard,
   starBoardToken,
@@ -21,21 +18,16 @@ import {
   type TierCounts,
 } from "./engine.js";
 import { entriesToAssignment, type GenRequest, type GenResponse } from "./engine.js";
-import { encodeParams, randomSeed, type PuzzleParams } from "./url.js";
+import { pickDoodles } from "./doodles.js";
+import { REALLY_MAX_SIZE, encodeParams, randomSeed, type PuzzleParams } from "./url.js";
 
 type Status = "generating" | "playing" | "solved";
 
 const TIER_LABEL: Record<number, string> = {
-  1: "no-three (a colour can't appear 3× in a row)",
-  2: "line balance (a line needs equal counts)",
-  3: "line enumeration (only one completion fits)",
-};
-
-/** Star-variant hint wording: tiers 1-2 gain star-flavoured deductions. */
-const STAR_TIER_LABEL: Record<number, string> = {
   1: "no-three (both pencils blocked here — must be the star)",
   2: "line counts (a pencil is used up, or only one spot fits the star)",
   3: "line enumeration (only one completion fits)",
+  4: "what-if (every other option runs into a dead end)",
 };
 
 /**
@@ -45,16 +37,12 @@ const STAR_TIER_LABEL: Record<number, string> = {
  */
 export class Game {
   // --- puzzle identity ---
-  boardId = $state("6-6");
-  /** The square sizes currently configured (drives the next New puzzle). */
-  sizes = $state<number[]>([6, 6]);
-  /** Arrangement seed for the current shape; null = the canonical stack. */
-  arrSeed = $state<number | null>(null);
-  difficulty = $state<Difficulty>("medium");
+  boardId = $state("s7");
+  difficulty = $state<Difficulty>("normal");
   seed = $state(0);
 
   // --- immutable-per-puzzle data (raw: not deeply proxied) ---
-  board = $state.raw<Board>(resolveBoard("6-6"));
+  board = $state.raw<Board>(resolveBoard("s7"));
   solution = $state.raw<State>(new Int8Array(0));
   clueSet = $state.raw<Set<number>>(new Set());
 
@@ -73,18 +61,44 @@ export class Game {
   revealed = $state(false);
   /** Colour an empty cell takes on the first tap: 1 = black, 0 = white. */
   firstColor = $state<0 | 1>(loadFirstColor());
+  /** Show the per-line star marks and the star counter. */
+  showStarCounts = $state<boolean>(loadBool(SHOW_STARS_KEY, true));
+  /** Highlight rule violations as they happen. */
+  instantValidation = $state<boolean>(loadBool(VALIDATION_KEY, true));
 
   // --- derived ---
-  /** True when the current board is the star variant (3 cell states). */
-  isStar = $derived(this.board.colours === 3);
-  /** The star board's size (7|9|11|15), or null on classic boards. */
+  /** The board's size (7|9|11|15). */
   starSize = $derived(parseStarSize(this.boardId));
-  violations = $derived(collectViolations(this.player, this.board));
+  /** The game's tile artwork, picked deterministically from the seed. */
+  doodles = $derived(pickDoodles(this.seed));
+  violations = $derived(
+    this.instantValidation
+      ? collectViolations(this.player, this.board)
+      : new Set<number>(),
+  );
   solved = $derived(
     this.player.length > 0 && isValidSolution(this.player, this.board),
   );
   filled = $derived(filledCount(this.player));
   total = $derived(this.board.order.length);
+  /** Stars the player (or clues) have placed so far. */
+  starsPlaced = $derived.by(() => {
+    let n = 0;
+    for (const v of this.player) if (v === SPECIAL) n++;
+    return n;
+  });
+  /** One star per row — the board's row count. */
+  starsTotal = $derived(this.board.lines.length / 2);
+  /** Stars currently placed per row-line, in top-to-bottom order. */
+  rowStarCounts = $derived(this.#lineStarCounts("row"));
+  /** Stars currently placed per column-line, in left-to-right order. */
+  colStarCounts = $derived(this.#lineStarCounts("col"));
+
+  #lineStarCounts(axis: "row" | "col"): number[] {
+    return this.board.lines
+      .filter((l) => l.axis === axis)
+      .map((l) => l.cells.filter((ci) => this.player[ci] === SPECIAL).length);
+  }
   canUndo = $derived(this.#undo.length > 0);
   canRedo = $derived(this.#redo.length > 0);
 
@@ -134,8 +148,6 @@ export class Game {
     }
     this.boardId = params.board;
     this.board = board;
-    this.sizes = parseBoardToken(params.board) ?? this.sizes;
-    this.arrSeed = parseArrSeed(params.board) ?? null;
     this.difficulty = params.difficulty;
     this.seed = params.seed;
     this.status = "generating";
@@ -153,42 +165,24 @@ export class Game {
     this.#worker.postMessage(req);
   }
 
-  /** New puzzle on the current shape (same board), fresh clues. */
+  /** New puzzle on the current board, fresh clues. */
   newPuzzle(difficulty: Difficulty = this.difficulty): void {
     this.generate({
-      board: this.isStar
-        ? this.boardId
-        : boardToken(this.sizes, this.arrSeed ?? undefined),
+      board: this.boardId,
       difficulty,
       seed: randomSeed(),
     });
   }
 
-  /** Switch to (or resize) a star-variant board, with a fresh puzzle. */
+  /** Switch to a different board size, with a fresh puzzle. */
   setStarSize(size: number): void {
     this.generate({
       board: starBoardToken(size),
-      difficulty: this.difficulty,
-      seed: randomSeed(),
-    });
-  }
-
-  /** Reconfigure the squares; pick a fresh random arrangement + new puzzle. */
-  setSizes(sizes: number[]): void {
-    const arrSeed = sizes.length > 1 ? randomSeed() : undefined;
-    this.generate({
-      board: boardToken(sizes, arrSeed),
-      difficulty: this.difficulty,
-      seed: randomSeed(),
-    });
-  }
-
-  /** Re-roll just the arrangement (same sizes), with a fresh puzzle. */
-  shuffleShape(): void {
-    if (this.sizes.length < 2) return;
-    this.generate({
-      board: boardToken(this.sizes, randomSeed()),
-      difficulty: this.difficulty,
+      // Big boards can't generate "Really?" within the time budget.
+      difficulty:
+        this.difficulty === "really" && size > REALLY_MAX_SIZE
+          ? "hard"
+          : this.difficulty,
       seed: randomSeed(),
     });
   }
@@ -209,10 +203,9 @@ export class Game {
   }
 
   /**
-   * Tap a cell: EMPTY -> first colour -> other colour -> (star ->) EMPTY. The
-   * first colour is the configurable `firstColor` (default black); the star
-   * step only exists on star-variant boards. Clue cells are locked, and taps
-   * are ignored while the solution is revealed.
+   * Tap a cell: EMPTY -> first colour -> other colour -> star -> EMPTY. The
+   * first colour is the configurable `firstColor` (default black). Clue cells
+   * are locked, and taps are ignored while the solution is revealed.
    */
   cycle(idx: number): void {
     if (this.status !== "playing" || this.revealed || this.clueSet.has(idx)) return;
@@ -221,9 +214,18 @@ export class Game {
     let next: number;
     if (cur === EMPTY) next = this.firstColor;
     else if (cur === this.firstColor) next = other;
-    else if (cur === other && this.isStar) next = SPECIAL;
+    else if (cur === other) next = SPECIAL;
     else next = EMPTY;
     this.#commit(idx, next);
+  }
+
+  /**
+   * Set a cell straight to the star, or clear it if it already holds one —
+   * the long-press / right-click shortcut past the tap cycle.
+   */
+  toggleStar(idx: number): void {
+    if (this.status !== "playing" || this.revealed || this.clueSet.has(idx)) return;
+    this.#commit(idx, this.player[idx] === SPECIAL ? EMPTY : SPECIAL);
   }
 
   /** Toggle the read-only solution overlay. */
@@ -238,6 +240,16 @@ export class Game {
   setFirstColor(c: 0 | 1): void {
     this.firstColor = c;
     saveFirstColor(c);
+  }
+
+  setShowStarCounts(v: boolean): void {
+    this.showStarCounts = v;
+    saveBool(SHOW_STARS_KEY, v);
+  }
+
+  setInstantValidation(v: boolean): void {
+    this.instantValidation = v;
+    saveBool(VALIDATION_KEY, v);
   }
 
   #commit(idx: number, val: number): void {
@@ -292,14 +304,14 @@ export class Game {
     }
 
     // 2. Reveal the next forced move.
-    const move = nextForcedMove(this.player, this.board, 3);
+    const move = nextForcedMove(this.player, this.board, 4);
     if (!move) {
       this.message = "No further move is forced by these tactics.";
       return;
     }
     this.#commit(move.cellIdx, move.val);
     this.hintCell = move.cellIdx;
-    this.message = `Hint: ${(this.isStar ? STAR_TIER_LABEL : TIER_LABEL)[move.tier]}.`;
+    this.message = `Hint: ${TIER_LABEL[move.tier]}.`;
   }
 
   #ensureTimer(): void {
@@ -319,6 +331,8 @@ export class Game {
 }
 
 const FIRST_COLOR_KEY = "unruly.firstColor";
+const SHOW_STARS_KEY = "unruly.showStarCounts";
+const VALIDATION_KEY = "unruly.instantValidation";
 
 function loadFirstColor(): 0 | 1 {
   try {
@@ -331,6 +345,23 @@ function loadFirstColor(): 0 | 1 {
 function saveFirstColor(c: 0 | 1): void {
   try {
     localStorage.setItem(FIRST_COLOR_KEY, String(c));
+  } catch {
+    // ignore (e.g. storage disabled)
+  }
+}
+
+function loadBool(key: string, dflt: boolean): boolean {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw === null ? dflt : raw === "1";
+  } catch {
+    return dflt;
+  }
+}
+
+function saveBool(key: string, v: boolean): void {
+  try {
+    localStorage.setItem(key, v ? "1" : "0");
   } catch {
     // ignore (e.g. storage disabled)
   }

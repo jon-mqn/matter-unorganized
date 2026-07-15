@@ -7,7 +7,7 @@ import { assignmentToEntries, type GenRequest, type GenResponse } from "./engine
 self.onmessage = (e: MessageEvent<GenRequest>) => {
   const { boardId, difficulty, seed } = e.data;
   const board = resolveBoard(boardId);
-  const budget = generationBudget(board.order.length);
+  const budget = generationBudget(board.order.length, difficulty);
   const puzzle = generate(board, difficulty, makeRng(seed), budget);
 
   const res: GenResponse = {

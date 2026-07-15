@@ -5,15 +5,15 @@ import { rate } from "./logic.js";
 import { stateToAssignment } from "./state.js";
 
 const MAX_TIER_FOR: Record<Difficulty, number> = {
-  easy: 1,
-  medium: 2,
+  normal: 2,
   hard: 3,
+  really: 4,
 };
 
 const RATING_RANK: Record<Rating, number> = {
-  easy: 0,
-  medium: 1,
-  hard: 2,
+  normal: 0,
+  hard: 1,
+  really: 2,
   unfair: 100,
 };
 

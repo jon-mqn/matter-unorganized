@@ -1,5 +1,6 @@
 import type { Board, Colour, Line, State } from "./types.js";
 import { EMPTY, SPECIAL } from "./types.js";
+import { cloneState } from "./state.js";
 
 /**
  * Graded deduction tactics (§4.4), generalised to any number of cell states via
@@ -121,9 +122,8 @@ export function tier1Moves(state: State, board: Board): TacticResult {
 
 /**
  * Tier 2 — count forcing: window + cap eliminations leaving a single candidate
- * (on classic boards exactly the old balance fill), plus, on star boards, the
- * hidden single for the special: if only one cell of a line can still hold its
- * special, force it there.
+ * (the balance fill), plus the hidden single for the special: if only one cell
+ * of a line can still hold its special, force it there.
  */
 export function tier2Moves(state: State, board: Board): TacticResult {
   const elim = windowEliminations(state, board);
@@ -175,6 +175,79 @@ export function tier3Moves(state: State, board: Board): TacticResult {
     for (const [idx, val] of forced) addMove(res, state, idx, val);
   }
   return res;
+}
+
+/**
+ * Tier 4 — trial to contradiction: for an empty cell, tentatively place each
+ * surviving candidate and cascade tiers 1-3 to fixpoint; candidates that reach
+ * a contradiction are eliminated. A cell with exactly one survivor is forced;
+ * a cell with none is a contradiction. Still guess-free from the player's
+ * perspective: the forced move is certain, only the justification is "every
+ * other option runs into a dead end".
+ *
+ * Returns after the first forced move found — trials are expensive (each runs
+ * a full tier-1..3 solve) and `logicSolve` restarts from tier 1 after any move
+ * anyway, so finding more than one per invocation buys nothing.
+ */
+export function tier4Moves(state: State, board: Board): TacticResult {
+  const res: TacticResult = { moves: new Map(), contradiction: false };
+  const elim = windowEliminations(state, board);
+  addCapEliminations(state, board, elim);
+  const full = (1 << board.colours) - 1;
+
+  for (let i = 0; i < state.length; i++) {
+    if (state[i] !== EMPTY) continue;
+    const allowed = full & ~elim[i]!;
+    let survivors = 0;
+    let survivor = 0;
+    for (let c = 0; c < board.colours; c++) {
+      if ((allowed & (1 << c)) === 0) continue;
+      if (trialContradicts(state, board, i, c as Colour)) continue;
+      survivors++;
+      survivor = c;
+      if (survivors >= 2) break; // not forced; skip the remaining trials
+    }
+    if (survivors === 0) {
+      res.contradiction = true;
+      return res;
+    }
+    if (survivors === 1) {
+      addMove(res, state, i, survivor as Colour);
+      return res;
+    }
+  }
+  return res;
+}
+
+/**
+ * Would placing `val` at `idx` cascade (via tiers 1-2 run to fixpoint on a
+ * scratch copy) into a contradiction? The cascade deliberately stops at tier 2:
+ * including the tier-3 line DP catches more contradictions but costs an order
+ * of magnitude more per trial, and trials run O(cells × candidates) times per
+ * tier-4 invocation — with tier 3 in the loop, "really" generation blows the
+ * web time budget several times over.
+ */
+function trialContradicts(
+  state: State,
+  board: Board,
+  idx: number,
+  val: Colour,
+): boolean {
+  const trial = cloneState(state);
+  trial[idx] = val;
+  for (;;) {
+    let progressed = false;
+    for (const tier of [tier1Moves, tier2Moves]) {
+      const r = tier(trial, board);
+      if (r.contradiction) return true;
+      if (r.moves.size > 0) {
+        for (const [i, v] of r.moves) trial[i] = v;
+        progressed = true;
+        break; // restart from the lowest tier, mirroring logicSolve
+      }
+    }
+    if (!progressed) return false;
+  }
 }
 
 /**
